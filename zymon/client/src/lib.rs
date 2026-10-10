@@ -6,5 +6,6 @@ pub mod config;
 pub mod init;
 pub mod schedule;
 pub mod sections;
+pub mod service;
 pub mod state;
 pub mod sys;

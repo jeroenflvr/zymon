@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 use zymon_client::config::{self, Config};
-use zymon_client::{init, schedule, sections, state, sys};
+use zymon_client::{init, schedule, sections, service, state, sys};
 use zymon_core::log::{self, Level};
 
 const USAGE: &str = "usage:
   zymon-client init  [--config PATH] [--server HOST[:PORT]]... [--hostname NAME] [--os TAG] [--class CLS] [--force]
   zymon-client once  [--config PATH] [--dry-run] [--sections a,b,c] [-v]
   zymon-client run   [--config PATH] [--dry-run] [-v]
+  zymon-client restart                     restart the installed service (systemd / launchd; uses sudo when not root)
   zymon-client version
 
 config: --config, else $ZYMON_CLIENT_CONFIG, else the platform default (/etc/zymon/client.toml, macOS: /usr/local/etc/zymon/client.toml)
@@ -30,6 +31,7 @@ enum Cmd {
         dry_run: bool,
         verbose: bool,
     },
+    Restart,
     Version,
     Help,
 }
@@ -55,6 +57,7 @@ fn parse_args() -> Result<Cmd, lexopt::Error> {
     match sub.as_str() {
         "version" | "--version" | "-V" => return Ok(Cmd::Version),
         "help" | "--help" | "-h" => return Ok(Cmd::Help),
+        "restart" => return Ok(Cmd::Restart),
         "init" | "once" | "run" => {}
         other => return Err(lexopt::Error::UnexpectedArgument(other.into())),
     }
@@ -204,6 +207,10 @@ fn main() -> ExitCode {
         Cmd::Help => {
             print!("{USAGE}");
             ExitCode::SUCCESS
+        }
+        Cmd::Restart => {
+            eprintln!("zymon-client: {}", service::restart());
+            ExitCode::from(1)
         }
         Cmd::Version => {
             println!("zymon-client {}", env!("CARGO_PKG_VERSION"));

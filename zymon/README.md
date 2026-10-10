@@ -73,6 +73,7 @@ The hostname in the config must match the host in the server's `hosts.cfg`. Noth
 zymon-client init  [--config PATH] [--server HOST[:PORT]]... [--hostname NAME] [--os TAG] [--class CLS] [--force]
 zymon-client once  [--config PATH] [--dry-run] [--sections a,b,c] [-v]     exit 0 sent, 1 send failure, 2 config error
 zymon-client run   [--config PATH] [--dry-run] [-v]                        SIGTERM/SIGINT stop, SIGHUP reloads the config
+zymon-client restart                                                        restarts the installed service (systemctl / launchctl, via sudo if needed)
 zymon-client version
 ```
 

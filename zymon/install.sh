@@ -268,7 +268,16 @@ fi
 SVC_GROUP=$(id -gn "$SVC_USER" 2>/dev/null || echo "$SVC_USER")
 
 # ---- install -------------------------------------------------------------------------------------------------
-step "Installing to $BIN"
+OLD_VERSION=""
+[ -x "$BIN" ] && OLD_VERSION=$("$BIN" version 2>/dev/null || true)
+NEW_VERSION=$("$TMP/$ASSET" version 2>/dev/null || true)
+if [ -z "$OLD_VERSION" ]; then
+	step "Installing $NEW_VERSION to $BIN"
+elif [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
+	step "Reinstalling $NEW_VERSION to $BIN (already current; the latest release is $NEW_VERSION)"
+else
+	step "Upgrading $OLD_VERSION -> $NEW_VERSION in $BIN"
+fi
 priv mkdir -p "$BINDIR"
 priv install -m 0755 "$TMP/$ASSET" "$BIN"
 
