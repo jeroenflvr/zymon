@@ -62,8 +62,9 @@ case "$OS/$ARCH" in
 Linux/armv6l) LABEL=linux-armv6 ;;
 Linux/armv7l | Linux/armv8l) LABEL=linux-armv7 ;; # armv8l = 32-bit userland on a 64-bit kernel
 Linux/aarch64 | Linux/arm64) LABEL=linux-aarch64 ;;
+Linux/x86_64 | Linux/amd64) LABEL=linux-x86_64 ;;
 Darwin/arm64) LABEL=darwin-arm64 ;;
-*) die "no zymon-client build for $OS/$ARCH (supported: Linux armv6l/armv7l/aarch64, macOS arm64)" ;;
+*) die "no zymon-client build for $OS/$ARCH (supported: Linux x86_64/armv6l/armv7l/aarch64, macOS arm64)" ;;
 esac
 
 BINDIR=$PREFIX/bin

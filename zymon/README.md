@@ -17,7 +17,7 @@ for measurements.
 ```sh
 task setup     # rustup targets + cargo-zigbuild (needs zig on PATH)
 task check     # fmt + clippy -D warnings + tests
-task dist      # dist/linux-armv6, linux-armv7, linux-aarch64 (static musl) and darwin-arm64 + SHA256SUMS
+task dist      # dist/linux-armv6, linux-armv7, linux-aarch64, linux-x86_64 (static musl) and darwin-arm64 + SHA256SUMS
 ```
 
 `task` is [go-task](https://taskfile.dev): `brew install go-task` or
@@ -48,6 +48,7 @@ Pick the binary by `uname -m` on the target:
 | `armv6l` | Pi 1, Zero, Zero W (also safe on any 32-bit Pi OS) | `linux-armv6` |
 | `armv7l` | Pi 2, Zero 2 W, 3, 4, 5 with 32-bit Pi OS | `linux-armv7` |
 | `aarch64` | Pi 3, 4, 5, Zero 2 W with 64-bit Pi OS | `linux-aarch64` |
+| `x86_64` | Intel/AMD PCs and servers, VMs | `linux-x86_64` |
 | `arm64` (macOS) | Apple Silicon | `darwin-arm64` |
 
 An `armv7` binary dies with SIGILL on a Pi 1 / Zero W; when in doubt use `armv6`.
