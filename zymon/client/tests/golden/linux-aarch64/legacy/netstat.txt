@@ -1,0 +1,47 @@
+Ip:
+    Forwarding: 1
+    383 total packets received
+    0 forwarded
+    0 incoming packets discarded
+    383 incoming packets delivered
+    342 requests sent out
+    OutTransmits: 342
+Icmp:
+    0 ICMP messages received
+    0 input ICMP message failed
+    ICMP input histogram:
+    0 ICMP messages sent
+    0 ICMP messages failed
+    ICMP output histogram:
+Tcp:
+    3 active connection openings
+    1 passive connection openings
+    0 failed connection attempts
+    0 connection resets received
+    2 connections established
+    381 segments received
+    340 segments sent out
+    0 segments retransmitted
+    0 bad segments received
+    0 resets sent
+Udp:
+    2 packets received
+    0 packets to unknown port received
+    0 packet receive errors
+    2 packets sent
+    0 receive buffer errors
+    0 send buffer errors
+UdpLite:
+TcpExt:
+    2 TCP sockets finished time wait in fast timer
+    0 packet headers predicted
+    10 acknowledgments not containing data payload received
+    TCPRcvCoalesce: 30
+    TCPFromZeroWindowAdv: 18
+    TCPToZeroWindowAdv: 18
+    TCPOrigDataSent: 9
+    TCPDelivered: 12
+IpExt:
+    InOctets: 10864090
+    OutOctets: 20171
+    InNoECTPkts: 7605

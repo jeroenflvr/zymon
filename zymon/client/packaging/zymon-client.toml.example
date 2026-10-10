@@ -1,0 +1,59 @@
+# zymon-client configuration. `zymon-client init` writes a file like this one for the host it runs on.
+
+[identity]
+hostname = "pi4.lan"      # must match the host name in the Xymon server's hosts.cfg; dots are commafied on the wire
+os = "linux"              # OSTAG sent to the server; selects the server-side parser (linux, darwin, or e.g. "rhel")
+class = "linux"           # client class used for analysis.cfg CLASS= rules
+
+[servers]
+list = ["192.168.1.10", "backup.example.org:1984"]   # every message goes to every server
+connect_timeout_s = 10
+read_timeout_s = 15
+retries = 3
+
+[schedule]
+interval_s = 300
+jitter_s = 30
+
+[exec]
+timeout_s = 20            # hard limit for each external command (ps, who, netstat, ...)
+
+[sections]                # false = detected but disabled; a missing key = not applicable on this host
+date = true
+uname = true
+osversion = true
+uptime = true
+who = true
+df = true
+inode = true
+mount = true
+free = true
+ifconfig = true
+route = true
+netstat = true
+ports = true
+ifstat = true
+mdstat = true
+ps = true
+nproc = true
+top = true
+vmstat = true
+cpuinfo = true
+crontab = true
+docker = false
+clientversion = true
+clock = true
+
+[docker]
+socket = "/var/run/docker.sock"
+must_run = []             # e.g. ["nginx", "db"]: sends status MACHINE.docker red when one is not running
+status_column = "docker"
+
+[info]                    # snapshot taken by `init`, informational only
+model = "Raspberry Pi Zero W Rev 1.1"
+cpu_model = "ARMv6-compatible processor rev 7 (v6l)"
+cpu_arch = "7"
+cores = 1
+hardware = "BCM2835"
+revision = "9000c1"
+arch = "armv6l"

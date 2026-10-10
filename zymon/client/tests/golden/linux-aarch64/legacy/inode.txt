@@ -1,0 +1,2 @@
+Filesystem     Inodes IUsed IFree IUse% Mounted on
+/dev/vdb1           0     0     0     - /etc/hosts

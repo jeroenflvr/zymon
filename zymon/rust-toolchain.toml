@@ -1,0 +1,9 @@
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+targets = [
+  "arm-unknown-linux-musleabihf",
+  "armv7-unknown-linux-musleabihf",
+  "aarch64-unknown-linux-musl",
+  "aarch64-apple-darwin",
+]

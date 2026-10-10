@@ -1,0 +1,91 @@
+version: '3'
+
+vars:
+  BIN: zymon-client
+  DIST: dist
+  LINUX_TARGETS: arm-unknown-linux-musleabihf armv7-unknown-linux-musleabihf aarch64-unknown-linux-musl
+  DARWIN_TARGET: aarch64-apple-darwin
+  # dist/<label> names match `uname -m` on the Pi: armv6l -> linux-armv6, armv7l -> linux-armv7, aarch64 -> linux-aarch64
+
+tasks:
+  default:
+    cmds: [task --list]
+
+  setup:
+    desc: Install Rust targets and cargo-zigbuild (requires rustup, zig on PATH)
+    cmds:
+      - rustup target add {{.LINUX_TARGETS}} {{.DARWIN_TARGET}}
+      - cargo install cargo-zigbuild --locked
+      - 'command -v zig >/dev/null || { echo "zig not found: brew install zig / apt install zig"; exit 1; }'
+
+  fmt:
+    desc: rustfmt check
+    cmds: [cargo fmt --all -- --check]
+
+  lint:
+    desc: clippy, deny warnings
+    cmds: [cargo clippy --workspace --all-targets -- -D warnings]
+
+  test:
+    desc: unit + golden + loopback tests on the host
+    cmds: [cargo test --workspace]
+
+  check:
+    desc: fmt + lint + test
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test
+
+  build:linux:
+    desc: Cross-build the client for all Raspberry Pi targets (static musl)
+    cmds:
+      - for: { var: LINUX_TARGETS }
+        cmd: cargo zigbuild --release -p zymon-client --target {{.ITEM}}
+
+  build:darwin:
+    desc: Native build for Apple Silicon (macOS host only)
+    platforms: [darwin]
+    cmds:
+      - cargo build --release -p zymon-client --target {{.DARWIN_TARGET}}
+
+  build:
+    desc: Build everything this host can build
+    cmds:
+      - task: build:linux
+      - task: build:darwin
+
+  dist:
+    desc: Collect binaries into dist/<label>/zymon-client and write SHA256SUMS
+    deps: [build]
+    cmds:
+      - rm -rf {{.DIST}} && mkdir -p {{.DIST}}
+      - for: { var: LINUX_TARGETS }
+        cmd: |
+          case "{{.ITEM}}" in
+            arm-unknown-linux-musleabihf)   label=linux-armv6 ;;
+            armv7-unknown-linux-musleabihf) label=linux-armv7 ;;
+            aarch64-unknown-linux-musl)     label=linux-aarch64 ;;
+            *) echo "no label for {{.ITEM}}"; exit 1 ;;
+          esac
+          mkdir -p {{.DIST}}/$label
+          cp target/{{.ITEM}}/release/{{.BIN}} {{.DIST}}/$label/
+          file {{.DIST}}/$label/{{.BIN}} | grep -q 'statically linked' || { echo "{{.ITEM}} is not static"; exit 1; }
+      - |
+        if [ "$(uname -s)" = Darwin ] && [ -f target/{{.DARWIN_TARGET}}/release/{{.BIN}} ]; then
+          mkdir -p {{.DIST}}/darwin-arm64 && cp target/{{.DARWIN_TARGET}}/release/{{.BIN}} {{.DIST}}/darwin-arm64/
+        fi
+      - cd {{.DIST}} && find . -type f -name {{.BIN}} -exec shasum -a 256 {} + > SHA256SUMS
+      - ls -l {{.DIST}}/*/{{.BIN}}
+
+  size:
+    desc: Print stripped binary sizes per target
+    cmds:
+      - for: { var: LINUX_TARGETS }
+        cmd: ls -l target/{{.ITEM}}/release/{{.BIN}} 2>/dev/null || true
+      - ls -l target/{{.DARWIN_TARGET}}/release/{{.BIN}} 2>/dev/null || true
+
+  clean:
+    cmds:
+      - cargo clean
+      - rm -rf {{.DIST}}

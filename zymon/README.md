@@ -1,0 +1,87 @@
+# zymon
+
+A Rust rewrite of Xymon. Phase 1 is the **client**: it detects what a host can report, collects it in the
+legacy client format and sends it to an unmodified Xymon 4.3.x server (`xymond`, TCP 1984).
+
+| Path | Crate | Contents |
+|---|---|---|
+| `core/` | `zymon-core` | wire protocol, TCP sender, host naming, reply parser, logger (shared with the future server) |
+| `client/` | `zymon-client` | `init`, `once`, `run`; one function per `[section]` |
+| `server/` | - | empty in this phase |
+
+See [AGENTS.md](./AGENTS.md) / [INSTRUCTIONS.md](./INSTRUCTIONS.md) for the brief and [client/README.md](./client/README.md)
+for measurements.
+
+## Build
+
+```sh
+task setup     # rustup targets + cargo-zigbuild (needs zig on PATH)
+task check     # fmt + clippy -D warnings + tests
+task dist      # dist/linux-armv6, linux-armv7, linux-aarch64 (static musl) and darwin-arm64 + SHA256SUMS
+```
+
+`task` is [go-task](https://taskfile.dev): `brew install go-task` or
+`sh -c "$(curl -sL https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin`.
+
+## Install
+
+Pick the binary by `uname -m` on the target:
+
+| `uname -m` | Hardware | `dist/` directory |
+|---|---|---|
+| `armv6l` | Pi 1, Zero, Zero W (also safe on any 32-bit Pi OS) | `linux-armv6` |
+| `armv7l` | Pi 2, Zero 2 W, 3, 4, 5 with 32-bit Pi OS | `linux-armv7` |
+| `aarch64` | Pi 3, 4, 5, Zero 2 W with 64-bit Pi OS | `linux-aarch64` |
+| `arm64` (macOS) | Apple Silicon | `darwin-arm64` |
+
+An `armv7` binary dies with SIGILL on a Pi 1 / Zero W; when in doubt use `armv6`.
+
+```sh
+sudo install -m 0755 dist/linux-armv6/zymon-client /usr/local/bin/        # use your directory
+sudo useradd --system --home /var/lib/zymon --shell /usr/sbin/nologin zymon
+sudo mkdir -p /etc/zymon && sudo chown zymon /etc/zymon
+sudo -u zymon zymon-client init --server xymon.example.org               # detects the host, writes /etc/zymon/client.toml
+sudo -u zymon zymon-client once --dry-run | less                          # exactly what would be sent
+sudo install -m 0644 client/packaging/zymon-client.service /etc/systemd/system/
+sudo systemctl enable --now zymon-client
+```
+
+macOS: install to `/usr/local/bin`, `zymon-client init --server ... ` (writes `/usr/local/etc/zymon/client.toml`; create the
+directory first), then copy `client/packaging/org.zymon.client.plist` to `/Library/LaunchDaemons/`, adjust `UserName`
+(`_zymon` must exist; your own login also works) and `sudo launchctl load -w /Library/LaunchDaemons/org.zymon.client.plist`.
+
+The hostname in the config must match the host in the server's `hosts.cfg`. Nothing else is needed on the server.
+
+## Usage
+
+```
+zymon-client init  [--config PATH] [--server HOST[:PORT]]... [--hostname NAME] [--os TAG] [--class CLS] [--force]
+zymon-client once  [--config PATH] [--dry-run] [--sections a,b,c] [-v]     exit 0 sent, 1 send failure, 2 config error
+zymon-client run   [--config PATH] [--dry-run] [-v]                        SIGTERM/SIGINT stop, SIGHUP reloads the config
+zymon-client version
+```
+
+Config path: `--config`, else `$ZYMON_CLIENT_CONFIG`, else `/etc/zymon/client.toml` (macOS `/usr/local/etc/zymon/client.toml`).
+`init` refuses to overwrite an existing file without `--force` and never touches the network.
+The client also reads `$XDG_STATE_HOME`, only to find a writable state directory when `/var/lib/zymon` is not.
+
+The sample [client/packaging/zymon-client.toml.example](./client/packaging/zymon-client.toml.example) documents every key.
+
+* `[sections]`: one key per section; `false` = detected but disabled, no key = not applicable here.
+  A section needing root is skipped by `init` and never attempted.
+* `docker.must_run = ["web"]`: after each client message a `status+<2*interval> HOST.docker` combo goes out, red when a
+  listed container is missing or not running. The inventory itself is the `[docker]` client section.
+* The server's reply (a `logfetch.cfg`) is stored in `<state dir>/clientcfg.txt`. `log:`/`file:`/`dir:` entries are not acted on yet,
+  and `clientversion:` is ignored: zymon never updates itself.
+
+Besides the legacy sections the client sends `[cpuinfo]`, `[crontab]` and `[docker]`; the legacy server keeps them and shows
+them on the "client data" page.
+
+## Tests
+
+* unit tests per parser (literal inputs), `cargo test --workspace`
+* `client/tests/legacy_parse.rs`: the server's acceptance checks applied to `once --dry-run` on the test host
+* `client/tests/fake_xymond.rs`: loopback server, real binary: header, section order, `[clock]` last, reply persisted, exit codes
+* `client/tests/golden_sections.rs`: legacy-script output captured per hardware class in `client/tests/golden/`
+  (`capture.sh` captures a new class on real hardware; `linux-aarch64` and `darwin-arm64` are committed)
+* `sh client/tests/diff-legacy.sh`: the manual oracle: section sizes and a diff against the legacy shell client on this host

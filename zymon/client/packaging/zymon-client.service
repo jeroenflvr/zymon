@@ -1,0 +1,23 @@
+[Unit]
+Description=zymon client (Xymon-compatible monitoring client)
+Documentation=file:///usr/local/share/doc/zymon/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zymon
+# Uncomment to monitor containers (the zymon user must be able to read the Docker socket):
+#SupplementaryGroups=docker
+ExecStart=/usr/local/bin/zymon-client run --config /etc/zymon/client.toml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=30
+# /var/lib/zymon holds the server's last reply (clientcfg.txt)
+StateDirectory=zymon
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

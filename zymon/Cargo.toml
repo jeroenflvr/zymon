@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = ["core", "client"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-only"
+
+[workspace.dependencies]
+libc   = "0.2"
+serde  = { version = "1", features = ["derive"] }
+toml   = "0.9"
+lexopt = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false

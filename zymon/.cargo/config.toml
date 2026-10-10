@@ -1,0 +1,10 @@
+# Static musl binaries for every Linux target; CPU flags match the oldest core per family.
+
+[target.arm-unknown-linux-musleabihf]
+rustflags = ["-C", "target-feature=+crt-static", "-C", "target-cpu=arm1176jzf-s"]
+
+[target.armv7-unknown-linux-musleabihf]
+rustflags = ["-C", "target-feature=+crt-static", "-C", "target-cpu=cortex-a7"]
+
+[target.aarch64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]

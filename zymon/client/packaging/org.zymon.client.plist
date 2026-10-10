@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.zymon.client</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/zymon-client</string>
+		<string>run</string>
+		<string>--config</string>
+		<string>/usr/local/etc/zymon/client.toml</string>
+	</array>
+	<!-- Unprivileged: create the account first (see README) or put your own login name here. -->
+	<key>UserName</key>
+	<string>_zymon</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/usr/local/var/log/zymon-client.log</string>
+</dict>
+</plist>
