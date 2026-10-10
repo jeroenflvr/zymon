@@ -213,7 +213,7 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 
 step "Detected $OS/$ARCH, installing build $LABEL ($VERSION)"
 ASSET=zymon-client-$LABEL
-fetch "$BASE/$ASSET" "$TMP/$ASSET" || die "download failed: $BASE/$ASSET"
+fetch "$BASE/$ASSET" "$TMP/$ASSET" || die "download failed: $BASE/$ASSET (no published release with the zymon-client-* assets yet? see task release in the zymon README)"
 fetch "$BASE/SHA256SUMS" "$TMP/SHA256SUMS" || die "download failed: $BASE/SHA256SUMS"
 WANT=$(awk -v a="$ASSET" '$2 == a || $2 == "./" a { print $1 }' "$TMP/SHA256SUMS" | head -1)
 [ -n "$WANT" ] || die "$ASSET not listed in SHA256SUMS"

@@ -1,0 +1,124 @@
+name: zymon-client
+
+# Pull requests and pushes to main touching zymon/: fmt, clippy, tests and a build of every target.
+# Tags v*: the same, then publish a GitHub release with the flat assets install.sh downloads
+# (zymon-client-<label> + SHA256SUMS).
+on:
+  push:
+    branches: [main]
+    paths: ['zymon/**', '.github/workflows/zymon-release.yml']
+    tags: ['v*']
+  pull_request:
+    paths: ['zymon/**', '.github/workflows/zymon-release.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: zymon
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: zymon
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  build-linux:
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: arm-unknown-linux-musleabihf, label: linux-armv6 }
+          - { target: armv7-unknown-linux-musleabihf, label: linux-armv7 }
+          - { target: aarch64-unknown-linux-musl, label: linux-aarch64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: zymon
+          key: ${{ matrix.target }}
+      - name: Install zig and cargo-zigbuild
+        run: |
+          pip install --user ziglang cargo-zigbuild
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo zigbuild --release --locked -p zymon-client --target ${{ matrix.target }}
+      - name: Stage and verify the binary
+        run: |
+          mkdir -p out
+          cp target/${{ matrix.target }}/release/zymon-client out/zymon-client-${{ matrix.label }}
+          file out/zymon-client-${{ matrix.label }}
+          file out/zymon-client-${{ matrix.label }} | grep -q 'statically linked'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zymon-client-${{ matrix.label }}
+          path: zymon/out/zymon-client-${{ matrix.label }}
+          if-no-files-found: error
+
+  build-macos:
+    needs: check
+    runs-on: macos-14 # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: zymon
+      - run: rustup target add aarch64-apple-darwin
+      - run: cargo build --release --locked -p zymon-client --target aarch64-apple-darwin
+      - name: Test on macOS (native sections, legacy-format acceptance checks)
+        run: cargo test --workspace --locked
+      - name: Stage the binary
+        run: |
+          mkdir -p out
+          cp target/aarch64-apple-darwin/release/zymon-client out/zymon-client-darwin-arm64
+          file out/zymon-client-darwin-arm64
+          out/zymon-client-darwin-arm64 version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zymon-client-darwin-arm64
+          path: zymon/out/zymon-client-darwin-arm64
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match the crate version
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != workspace version $version"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: zymon-client-*
+          merge-multiple: true
+          path: zymon/release
+      - name: Checksums
+        working-directory: zymon/release
+        run: |
+          chmod +x zymon-client-*
+          sha256sum zymon-client-* > SHA256SUMS
+          cat SHA256SUMS
+          [ "$(wc -l < SHA256SUMS)" -eq 4 ]
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/* --title "zymon-client $GITHUB_REF_NAME" --generate-notes
+          fi
