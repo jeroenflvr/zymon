@@ -27,6 +27,7 @@ pub mod osversion;
 pub mod ports;
 pub mod ps;
 pub mod route;
+pub mod smart;
 pub mod top;
 pub mod uname;
 pub mod uptime;
@@ -52,6 +53,7 @@ pub const LINUX: &[&str] = &[
     "ports",
     "ifstat",
     "mdstat",
+    "smart",
     "ps",
     "nproc",
     "top",
@@ -78,6 +80,7 @@ pub const DARWIN: &[&str] = &[
     "netstat",
     "ifstat",
     "ports",
+    "smart",
     "ps",
     "nproc",
     "top",
@@ -103,6 +106,8 @@ pub struct Ctx<'a> {
     pub cur: Option<Snap>,
     /// Raw `ps` capture, reused by `[top]` (`ps` always runs before `top`).
     pub ps: Option<Vec<u8>>,
+    /// `[smart]` capture, handed to the `smart` status column after the client message is built.
+    pub smart: Option<Vec<smart::Disk>>,
     who: Option<Vec<u8>>,
 }
 
@@ -113,6 +118,7 @@ impl<'a> Ctx<'a> {
             prev,
             cur,
             ps: None,
+            smart: None,
             who: None,
         }
     }
@@ -155,6 +161,7 @@ pub fn run(name: &str, ctx: &mut Ctx, w: &mut SectionWriter) -> Res {
         "ports" => ports::ports(ctx, w),
         "ifstat" => ifstat::ifstat(ctx, w),
         "mdstat" => mdstat::mdstat(ctx, w),
+        "smart" => smart::smart(ctx, w),
         "ps" => ps::ps(ctx, w),
         "nproc" => nproc::nproc(ctx, w),
         "top" => top::top(ctx, w),

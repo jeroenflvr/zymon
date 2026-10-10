@@ -65,6 +65,28 @@ fn cputemp_probe() -> Probe {
     }
 }
 
+/// smartmontools installed and runnable: as root directly, otherwise through a NOPASSWD sudoers rule.
+fn smart_probe() -> Probe {
+    let Some(path) = exec::which("smartctl") else {
+        return Probe::Absent("smartctl not found");
+    };
+    if common::euid() == 0 {
+        return Probe::On;
+    }
+    let ok = exec::run(
+        "sudo",
+        &["-n", &path.to_string_lossy(), "--version"],
+        std::time::Duration::from_secs(5),
+    )
+    .map(|o| o.success)
+    .unwrap_or(false);
+    if ok {
+        Probe::On
+    } else {
+        Probe::Off("needs root or a sudoers rule for smartctl")
+    }
+}
+
 pub fn probe(name: &str, docker_sock: &str) -> Probe {
     let mac = cfg!(target_os = "macos");
     match name {
@@ -131,6 +153,7 @@ pub fn probe(name: &str, docker_sock: &str) -> Probe {
             }
         }
         "mdstat" => src("/proc/mdstat"),
+        "smart" => smart_probe(),
         "ps" => bin("ps"),
         "top" => {
             if mac {

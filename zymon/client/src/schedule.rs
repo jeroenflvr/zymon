@@ -2,7 +2,7 @@
 
 use crate::collect::build_client_message;
 use crate::config::{self, Config};
-use crate::sections::{cputemp, docker};
+use crate::sections::{cputemp, docker, smart};
 use crate::state::State;
 use crate::sys::common;
 use std::io::Write;
@@ -43,8 +43,9 @@ pub struct CycleOpts<'a> {
     pub state_dir: &'a Path,
 }
 
-/// Columns the client evaluates itself, sent as one `combo`: `docker` (when `docker.must_run` is set) and `cputemp`.
-fn client_side_statuses(cfg: &Config) -> Vec<Vec<u8>> {
+/// Columns the client evaluates itself, sent as one `combo`: `docker` (when `docker.must_run` is set), `cputemp`
+/// and `smart` (from the `[smart]` capture of this cycle).
+fn client_side_statuses(cfg: &Config, state: &mut State) -> Vec<Vec<u8>> {
     let mut v = Vec::new();
     if !cfg.docker.must_run.is_empty()
         && let Some(s) =
@@ -57,6 +58,11 @@ fn client_side_statuses(cfg: &Config) -> Vec<Vec<u8>> {
     {
         v.push(s);
     }
+    if let Some(disks) = state.smart.take()
+        && let Some(s) = smart::status_message(cfg, &disks)
+    {
+        v.push(s);
+    }
     v
 }
 
@@ -65,8 +71,9 @@ fn client_side_statuses(cfg: &Config) -> Vec<Vec<u8>> {
 pub fn cycle(cfg: &Config, state: &mut State, o: &CycleOpts) -> bool {
     let msg = build_client_message(cfg, state, o.only);
     let extra = if o.only.is_none() {
-        client_side_statuses(cfg)
+        client_side_statuses(cfg, state)
     } else {
+        state.smart = None;
         Vec::new()
     };
 

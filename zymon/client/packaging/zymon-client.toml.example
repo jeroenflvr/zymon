@@ -34,6 +34,7 @@ netstat = true
 ports = true
 ifstat = true
 mdstat = true
+smart = true              # smartctl found and usable; also sends the `smart` status column
 ps = true
 nproc = true
 top = true
@@ -54,6 +55,10 @@ status_column = "docker"
 warn_c = 70.0             # yellow at or above (the Pi throttles at 80)
 panic_c = 80.0            # red at or above
 status_column = "cputemp"
+
+[smart]
+devices = []              # smartctl arguments per disk, e.g. ["/dev/sda", "/dev/sdb -d sat"]; empty = `smartctl --scan-open`
+status_column = "smart"
 
 [info]                    # snapshot taken by `init`, informational only
 model = "Raspberry Pi Zero W Rev 1.1"

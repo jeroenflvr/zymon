@@ -65,5 +65,6 @@ pub fn build_client_message(cfg: &Config, state: &mut State, only: Option<&[Stri
         zymon_core::debug!("section {name}: {:?}", t.elapsed());
     }
     state.prev = ctx.cur.take();
+    state.smart = ctx.smart.take();
     msg
 }

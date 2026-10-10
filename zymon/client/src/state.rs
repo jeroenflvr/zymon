@@ -1,5 +1,7 @@
-//! Cross-cycle state: the previous counter snapshot, so `[vmstat]` and `[top]` can report deltas.
+//! Cross-cycle state: the previous counter snapshot, so `[vmstat]` and `[top]` can report deltas, plus the
+//! `[smart]` capture of the current cycle for the status column that follows the client message.
 
+use crate::sections::smart::Disk;
 use std::time::Instant;
 
 /// CPU jiffies in /proc/stat order: user nice system idle iowait irq softirq steal.
@@ -23,4 +25,6 @@ pub struct Snap {
 #[derive(Default)]
 pub struct State {
     pub prev: Option<Snap>,
+    /// Set by the `[smart]` section, taken by the `smart` status column (smartctl runs once per cycle).
+    pub smart: Option<Vec<Disk>>,
 }

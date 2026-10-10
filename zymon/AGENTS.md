@@ -141,7 +141,8 @@ zymon/
 │   │   │   ├── clock.rs clientversion.rs
 │   │   │   ├── cpuinfo.rs       # zymon extra: /proc/cpuinfo Model/model name/Hardware/Revision… (for "info")
 │   │   │   ├── crontab.rs       # zymon extra: system + user crontabs
-│   │   │   └── docker.rs        # zymon extra: container inventory + client-side status
+│   │   │   ├── docker.rs        # zymon extra: container inventory + client-side status
+│   │   │   └── smart.rs         # zymon extra: smartctl disk health + client-side `smart` status
 │   │   └── sys/                 # thin OS shims; nothing above this layer touches libc
 │   │       ├── mod.rs
 │   │       ├── linux.rs         # /proc + /sys readers, statvfs, getmntent-free /proc/self/mounts parser
@@ -244,11 +245,12 @@ Linux extras (zymon-only, stored by the server, used later by the zymon server):
 | `[cpuinfo]` | Parsed from **`/proc/cpuinfo`** (plus `/sys` and `/proc/device-tree` fallbacks), emitted as `key: value` lines in this fixed order: `model: ` (Pi: the `Model` line, e.g. `Raspberry Pi Zero W Rev 1.1`; fallback `/proc/device-tree/model`), `cpu_model: ` (`model name` on ARMv6/x86, else the first `CPU implementer`/`CPU part` pair decoded to a Cortex name, e.g. `Cortex-A53`), `cpu_arch: ` (`CPU architecture` line), `features: ` (`Features`/`flags` line), `cores: N` (count of `processor` entries), `bogomips: ` (first `BogoMIPS`), `hardware: ` (`Hardware` line, e.g. `BCM2835`; fallback `/proc/device-tree/compatible`), `revision: ` (`Revision` line, e.g. `9000c1`), `arch: ` (`uname -m`), `cpu_mhz_max: ` (`/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq` ÷ 1000 if readable), `throttled: 0x0` (`/sys/devices/platform/soc/soc:firmware/get_throttled` if readable). **Never emit the `Serial` line.** Omit a key when the source is missing; `/proc/cpuinfo` is read every cycle, not cached — it is cheap and lets a swapped SD card report correctly. |
 | `[crontab]` | `/etc/crontab`, `/etc/cron.d/*`, and `crontab -l` of the running user, each prefixed `# file: <path>`; comments and blank lines stripped; deterministic order |
 | `[docker]` | one line per container: `<name> <image> <state> <status>` via `GET /containers/json?all=1` on the unix socket (hand-rolled HTTP/1.1, no crate). Omit if socket absent/unreadable. |
+| `[smart]` | one line per disk from `smartctl -i -H -A -n standby` (devices from `smartctl --scan-open` or `[smart] devices`): `<name> <PASSED\|FAILED\|-> <temp C\|-> <hours\|-> <model> <serial> [# problems; note]`. Also feeds the client-side `smart` status column (red: health failed, yellow: bad sectors / errors / NVMe wear ≥ 90 %, clear: standby or no SMART). Runs `sudo -n smartctl` when not root. |
 
 ### 5.5 Sections — macOS ([../client/xymonclient-darwin.sh](../client/xymonclient-darwin.sh))
 
 `date, uname (-a), uptime, who, df, inode, mount, meminfo, ifconfig, route, netstat,
-ifstat, ports, ps, nproc, top, [cpuinfo], [crontab], [docker], clientversion, clock`.
+ifstat, ports, [smart], ps, nproc, top, [cpuinfo], [crontab], [docker], clientversion, clock`.
 
 Differences that matter: `[df]` header words are `Avail`, `Capacity`, `Mounted`;
 `[inode]` header `ifree`, `%iused`, `Mounted` (the script rewrites `df -i` into a

@@ -7,7 +7,21 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[cfg(not(target_os = "macos"))]
 pub const SEARCH_PATH: &[&str] = &[
+    "/usr/local/sbin",
+    "/usr/local/bin",
+    "/usr/sbin",
+    "/usr/bin",
+    "/sbin",
+    "/bin",
+];
+
+/// Homebrew (Apple silicon) first: that is where smartctl lives on a Mac.
+#[cfg(target_os = "macos")]
+pub const SEARCH_PATH: &[&str] = &[
+    "/opt/homebrew/sbin",
+    "/opt/homebrew/bin",
     "/usr/local/sbin",
     "/usr/local/bin",
     "/usr/sbin",

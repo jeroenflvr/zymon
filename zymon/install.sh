@@ -267,6 +267,26 @@ else
 fi
 SVC_GROUP=$(id -gn "$SVC_USER" 2>/dev/null || echo "$SVC_USER")
 
+# ---- S.M.A.R.T. --------------------------------------------------------------------------------------------
+# smartctl needs raw device access; the client runs it through `sudo -n` when it is not root.
+SMARTCTL=""
+for d in /opt/homebrew/sbin /opt/homebrew/bin /usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin /bin; do
+	[ -x "$d/smartctl" ] && SMARTCTL="$d/smartctl" && break
+done
+SUDOERS_FILE=/etc/sudoers.d/zymon-smartctl
+if [ -n "$SMARTCTL" ] && [ "$SVC_USER" != root ] && [ "$SUDO" != none ] && [ ! -e "$SUDOERS_FILE" ] && [ -d /etc/sudoers.d ]; then
+	if confirm "smartctl found. Let $SVC_USER run it as root without a password (writes $SUDOERS_FILE) to monitor disk S.M.A.R.T. health?" n; then
+		step "Writing $SUDOERS_FILE"
+		RULE="$SVC_USER ALL=(root) NOPASSWD: $SMARTCTL"
+		if printf '%s\n' "$RULE" | visudo -c -f - >/dev/null 2>&1 || printf '%s\n' "$RULE" | priv visudo -c -f - >/dev/null 2>&1; then
+			printf '%s\n' "$RULE" | priv tee "$SUDOERS_FILE" >/dev/null
+			priv chmod 0440 "$SUDOERS_FILE"
+		else
+			say "sudoers rule did not validate; skipped. Add it by hand: $RULE"
+		fi
+	fi
+fi
+
 # ---- install -------------------------------------------------------------------------------------------------
 OLD_VERSION=""
 [ -x "$BIN" ] && OLD_VERSION=$("$BIN" version 2>/dev/null || true)

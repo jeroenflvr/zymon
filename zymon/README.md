@@ -34,7 +34,8 @@ curl -fsSL https://raw.githubusercontent.com/jeroenflvr/zymon/main/zymon/install
 
 [install.sh](./install.sh) detects OS/arch, downloads the matching `zymon-client-<label>` from the GitHub release, verifies it against
 `SHA256SUMS`, installs to `/usr/local/bin`, runs `zymon-client init` as an unprivileged service user (`zymon` on Linux, the invoking user
-on macOS), and installs a systemd unit or launchd daemon. Re-running upgrades the binary and keeps the config. `--help` lists the options
+on macOS), and installs a systemd unit or launchd daemon. When it finds a Docker socket or `smartctl` it offers to let the service user use
+them (docker group membership, a `sudoers.d` rule for smartctl). Re-running upgrades the binary and keeps the config. `--help` lists the options
 (`--hostname`, `--version`, `--prefix`, `--no-service`, `--uninstall [--purge]`). `task release` builds the flat release assets
 (`dist/release/`) to attach to a GitHub release.
 
@@ -96,8 +97,17 @@ The sample [client/packaging/zymon-client.toml.example](./client/packaging/zymon
   `Yellow from 70 C, red from 80 C`. The value is the hottest CPU sensor; the colour turns yellow at `[cputemp] warn_c` (70), red at `panic_c` (80),
   and at least yellow while the Pi firmware reports throttling or under-voltage (an extra `&yellow firmware: ...` line, ignored by NCV).
   Hosts without a sensor (VMs, macOS) send neither.
+* `smart` column: `[smart]` lists every disk smartmontools can see, one line per disk:
+  `<name> <PASSED|FAILED|-> <temp C> <power-on hours> <model> <serial> [# problems; note]`. Each cycle a client-side
+  `status+<2*interval> HOST.smart` goes out: red when `smartctl -H` reports a failed health check (NVMe critical warning included),
+  yellow for reallocated/pending/uncorrectable sectors, media errors, SCSI grown defects, attributes that failed, or NVMe wear at 90 % or
+  more; clear for disks in standby (they are never spun up: `-n standby`) or without SMART. The body ends with `<name>_temp : <C>` lines,
+  so `NCV_smart="sda_temp:GAUGE,..."` graphs the temperatures. Disks come from `smartctl --scan-open`, or `[smart] devices` lists them
+  with any `-d TYPE` smartctl needs. `smartctl` needs raw device access: run as root or add a sudoers rule
+  (`zymon ALL=(root) NOPASSWD: /usr/sbin/smartctl`; `install.sh` offers to write it) — the client then calls `sudo -n smartctl`.
+  `init` leaves the section out when smartctl is missing and sets it to `false` when it cannot run it.
 
-Besides the legacy sections the client sends `[cpuinfo]`, `[cputemp]`, `[crontab]` and `[docker]`; the legacy server keeps them and shows
+Besides the legacy sections the client sends `[cpuinfo]`, `[cputemp]`, `[crontab]`, `[docker]` and `[smart]`; the legacy server keeps them and shows
 them on the "client data" page.
 
 ## Tests

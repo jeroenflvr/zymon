@@ -69,6 +69,14 @@ pub struct Cputemp {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
+pub struct Smart {
+    /// Devices to query, each as smartctl arguments (`"/dev/sda"`, `"/dev/sdb -d sat"`); empty = `smartctl --scan-open`.
+    pub devices: Vec<String>,
+    pub status_column: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default)]
 pub struct Exec {
     pub timeout_s: u64,
 }
@@ -96,6 +104,7 @@ pub struct Config {
     pub docker: Docker,
     pub exec: Exec,
     pub cputemp: Cputemp,
+    pub smart: Smart,
     pub info: Info,
     /// Optional override of where the server reply is kept (default: see `state_dir`).
     pub state_dir: Option<String>,
@@ -138,6 +147,15 @@ impl Default for Cputemp {
             warn_c: 70.0,
             panic_c: 80.0,
             status_column: "cputemp".into(),
+        }
+    }
+}
+
+impl Default for Smart {
+    fn default() -> Self {
+        Smart {
+            devices: Vec::new(),
+            status_column: "smart".into(),
         }
     }
 }
@@ -292,6 +310,15 @@ impl Config {
             "status_column = {}\n\n",
             q(&self.cputemp.status_column)
         ));
+        s.push_str("[smart]   # client-side `smart` status column from smartctl (smartmontools; root or a sudoers rule)\n");
+        s.push_str(&format!(
+            "devices = {}   # smartctl arguments per disk, e.g. [\"/dev/sda\", \"/dev/sdb -d sat\"]; empty = smartctl --scan-open\n",
+            qlist(&self.smart.devices)
+        ));
+        s.push_str(&format!(
+            "status_column = {}\n\n",
+            q(&self.smart.status_column)
+        ));
         s.push_str("[info]   # snapshot taken at init for reference only; [cpuinfo] re-reads /proc/cpuinfo each cycle\n");
         let i = &self.info;
         for (k, v) in [
@@ -376,6 +403,7 @@ mod tests {
         }
         c.sections.insert("docker".into(), false);
         c.docker.must_run = vec!["web".into()];
+        c.smart.devices = vec!["/dev/sda".into(), "/dev/sdb -d sat".into()];
         c.info = Info {
             model: Some("Raspberry Pi \"Zero\" W".into()),
             cpu_model: Some("ARMv6".into()),
