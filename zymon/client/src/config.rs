@@ -61,6 +61,14 @@ pub struct Docker {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
+pub struct Cputemp {
+    pub warn_c: f64,
+    pub panic_c: f64,
+    pub status_column: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default)]
 pub struct Exec {
     pub timeout_s: u64,
 }
@@ -87,6 +95,7 @@ pub struct Config {
     pub sections: BTreeMap<String, bool>,
     pub docker: Docker,
     pub exec: Exec,
+    pub cputemp: Cputemp,
     pub info: Info,
     /// Optional override of where the server reply is kept (default: see `state_dir`).
     pub state_dir: Option<String>,
@@ -118,6 +127,17 @@ impl Default for Docker {
             socket: "/var/run/docker.sock".into(),
             must_run: Vec::new(),
             status_column: "docker".into(),
+        }
+    }
+}
+
+impl Default for Cputemp {
+    fn default() -> Self {
+        // The Pi starts throttling at 80 C; warn well before that.
+        Cputemp {
+            warn_c: 70.0,
+            panic_c: 80.0,
+            status_column: "cputemp".into(),
         }
     }
 }
@@ -161,6 +181,9 @@ impl Config {
         }
         if self.schedule.interval_s == 0 {
             return bad("schedule.interval_s must be > 0");
+        }
+        if self.cputemp.warn_c >= self.cputemp.panic_c {
+            return bad("cputemp.warn_c must be below cputemp.panic_c");
         }
         if self
             .docker
@@ -255,6 +278,19 @@ impl Config {
         s.push_str(&format!(
             "status_column = {}\n\n",
             q(&self.docker.status_column)
+        ));
+        s.push_str("[cputemp]   # client-side `cputemp` status column (Linux), from the [cputemp] section's sensors\n");
+        s.push_str(&format!(
+            "warn_c = {:?}   # yellow at or above\n",
+            self.cputemp.warn_c
+        ));
+        s.push_str(&format!(
+            "panic_c = {:?}   # red at or above\n",
+            self.cputemp.panic_c
+        ));
+        s.push_str(&format!(
+            "status_column = {}\n\n",
+            q(&self.cputemp.status_column)
         ));
         s.push_str("[info]   # snapshot taken at init for reference only; [cpuinfo] re-reads /proc/cpuinfo each cycle\n");
         let i = &self.info;

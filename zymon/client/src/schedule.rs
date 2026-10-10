@@ -2,7 +2,7 @@
 
 use crate::collect::build_client_message;
 use crate::config::{self, Config};
-use crate::sections::docker;
+use crate::sections::{cputemp, docker};
 use crate::state::State;
 use crate::sys::common;
 use std::io::Write;
@@ -43,27 +43,42 @@ pub struct CycleOpts<'a> {
     pub state_dir: &'a Path,
 }
 
+/// Columns the client evaluates itself, sent as one `combo`: `docker` (when `docker.must_run` is set) and `cputemp`.
+fn client_side_statuses(cfg: &Config) -> Vec<Vec<u8>> {
+    let mut v = Vec::new();
+    if !cfg.docker.must_run.is_empty()
+        && let Some(s) =
+            docker::must_run_status(cfg, &docker::query(&cfg.docker.socket, cfg.exec_timeout()))
+    {
+        v.push(s);
+    }
+    if cfg.section_enabled("cputemp")
+        && let Some(s) = cputemp::current_status(cfg)
+    {
+        v.push(s);
+    }
+    v
+}
+
 /// Collect, send, handle the reply, then the optional docker status. True when at least one server
 /// accepted the client message (or in dry-run mode).
 pub fn cycle(cfg: &Config, state: &mut State, o: &CycleOpts) -> bool {
     let msg = build_client_message(cfg, state, o.only);
-    let docker_status = if o.only.is_none() && cfg.docker.must_run.is_empty() {
-        None
-    } else if o.only.is_none() {
-        docker::must_run_status(cfg, &docker::query(&cfg.docker.socket, cfg.exec_timeout()))
+    let extra = if o.only.is_none() {
+        client_side_statuses(cfg)
     } else {
-        None
+        Vec::new()
     };
 
     if o.dry_run {
         let mut out = std::io::stdout().lock();
         let _ = out.write_all(&msg);
         let _ = out.flush();
-        if let Some(s) = docker_status {
+        if !extra.is_empty() {
             eprintln!(
-                "--- docker status (separate combo message, not part of the client message) ---"
+                "--- client-side status columns (separate combo message, not part of the client message) ---"
             );
-            let _ = std::io::stderr().write_all(&proto::combo(&[s]));
+            let _ = std::io::stderr().write_all(&proto::combo(&extra));
         }
         return true;
     }
@@ -78,10 +93,10 @@ pub fn cycle(cfg: &Config, state: &mut State, o: &CycleOpts) -> bool {
     if ok {
         handle_reply(o.state_dir, &reply);
     }
-    if let Some(s) = docker_status {
-        let (_, errs) = net::send_all(servers, &proto::combo(&[s]), false, &opts);
+    if !extra.is_empty() {
+        let (_, errs) = net::send_all(servers, &proto::combo(&extra), false, &opts);
         for e in &errs {
-            zymon_core::error!("docker status: {e}");
+            zymon_core::error!("status columns: {e}");
         }
     }
     ok

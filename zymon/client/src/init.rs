@@ -44,6 +44,27 @@ fn docker_socket(path: &str) -> Probe {
     }
 }
 
+/// Linux thermal zones or hwmon sensors; present-but-unreadable means disabled, none at all means not applicable.
+fn cputemp_probe() -> Probe {
+    use crate::sections::cputemp;
+    if !cputemp::read_zones().is_empty() {
+        return Probe::On;
+    }
+    let exists = |root: &str, prefix: &str| {
+        std::fs::read_dir(root)
+            .map(|d| {
+                d.filter_map(|e| e.ok())
+                    .any(|e| e.file_name().to_string_lossy().starts_with(prefix))
+            })
+            .unwrap_or(false)
+    };
+    if exists("/sys/class/thermal", "thermal_zone") || exists("/sys/class/hwmon", "hwmon") {
+        Probe::Off("sensors not readable")
+    } else {
+        Probe::Absent("no temperature sensor")
+    }
+}
+
 pub fn probe(name: &str, docker_sock: &str) -> Probe {
     let mac = cfg!(target_os = "macos");
     match name {
@@ -125,6 +146,7 @@ pub fn probe(name: &str, docker_sock: &str) -> Probe {
                 src("/proc/vmstat")
             }
         }
+        "cputemp" => cputemp_probe(),
         "crontab" => {
             let any = File::open("/etc/crontab").is_ok()
                 || std::path::Path::new("/etc/cron.d").is_dir()

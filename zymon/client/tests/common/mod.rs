@@ -85,6 +85,7 @@ pub fn expected_order() -> &'static [&'static str] {
             "top",
             "vmstat",
             "cpuinfo",
+            "cputemp",
             "crontab",
             "docker",
             "clientversion",

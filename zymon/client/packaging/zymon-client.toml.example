@@ -39,6 +39,7 @@ nproc = true
 top = true
 vmstat = true
 cpuinfo = true
+cputemp = true            # Linux only; also sends the `cputemp` status column
 crontab = true
 docker = false
 clientversion = true
@@ -48,6 +49,11 @@ clock = true
 socket = "/var/run/docker.sock"
 must_run = []             # e.g. ["nginx", "db"]: sends status MACHINE.docker red when one is not running
 status_column = "docker"
+
+[cputemp]
+warn_c = 70.0             # yellow at or above (the Pi throttles at 80)
+panic_c = 80.0            # red at or above
+status_column = "cputemp"
 
 [info]                    # snapshot taken by `init`, informational only
 model = "Raspberry Pi Zero W Rev 1.1"

@@ -89,7 +89,12 @@ The sample [client/packaging/zymon-client.toml.example](./client/packaging/zymon
 * The server's reply (a `logfetch.cfg`) is stored in `<state dir>/clientcfg.txt`. `log:`/`file:`/`dir:` entries are not acted on yet,
   and `clientversion:` is ignored: zymon never updates itself.
 
-Besides the legacy sections the client sends `[cpuinfo]`, `[crontab]` and `[docker]`; the legacy server keeps them and shows
+* `cputemp` column (Linux): `[cputemp]` lists every thermal sensor (`name: degrees C`); a client-side `status+<2*interval> HOST.cputemp`
+  goes out with each cycle, yellow at `[cputemp] warn_c` (70) and red at `panic_c` (80) for the hottest CPU sensor, and at least yellow
+  while the Pi firmware reports active throttling or under-voltage. Hosts without a sensor (VMs, macOS) get neither. Add `cputemp` to the
+  server's `hosts.cfg` tags if your server only shows columns it knows (`NOCOLUMNS`/`COLUMNS` settings).
+
+Besides the legacy sections the client sends `[cpuinfo]`, `[cputemp]`, `[crontab]` and `[docker]`; the legacy server keeps them and shows
 them on the "client data" page.
 
 ## Tests

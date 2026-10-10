@@ -165,7 +165,7 @@ fn init_refuses_to_overwrite() {
         let present = text.lines().any(|l| l.starts_with(&format!("{s} = ")));
         let absent_ok = matches!(
             *s,
-            "mdstat" | "docker" | "ifconfig" | "osversion" | "crontab" | "who"
+            "mdstat" | "docker" | "cputemp" | "ifconfig" | "osversion" | "crontab" | "who"
         );
         assert!(present || absent_ok, "missing key {s}");
     }

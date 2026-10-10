@@ -9,6 +9,7 @@ use zymon_core::proto::SectionWriter;
 pub mod clientversion;
 pub mod clock;
 pub mod cpuinfo;
+pub mod cputemp;
 pub mod crontab;
 pub mod date;
 pub mod df;
@@ -56,6 +57,7 @@ pub const LINUX: &[&str] = &[
     "top",
     "vmstat",
     "cpuinfo",
+    "cputemp",
     "crontab",
     "docker",
     "clientversion",
@@ -158,6 +160,7 @@ pub fn run(name: &str, ctx: &mut Ctx, w: &mut SectionWriter) -> Res {
         "top" => top::top(ctx, w),
         "vmstat" => vmstat::vmstat(ctx, w),
         "cpuinfo" => cpuinfo::cpuinfo(ctx, w),
+        "cputemp" => cputemp::cputemp(ctx, w),
         "crontab" => crontab::crontab(ctx, w),
         "docker" => docker::docker(ctx, w),
         "clientversion" => clientversion::clientversion(ctx, w),
