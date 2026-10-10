@@ -31,3 +31,4 @@ Real Pi hardware was not available while writing this; everything below is from 
   the read-only system root `/`, which the legacy script's filter drops on modern macOS. Spaces in names become `_`.
 * `[free]` reports used = total - free - buff/cache; the server adds buff/cache back for its classic "used" thresholds.
 * On 32-bit ARM the `libc` crate still uses 32-bit `time_t`, matched by musl's time32 compatibility symbols (fine until 2038).
+* macOS `[meminfo]`: the server computes physical memory as free+active+inactive+wired, which misses speculative and compressed pages (a 16 GB Mac showed ~8 GB). `Pages free` is therefore reported as installed RAM minus the other three, so the server's total equals `hw.memsize`; the other `vm_stat` lines are untouched.
