@@ -1,8 +1,9 @@
 name: zymon-client
 
-# Pull requests and pushes to main touching zymon/: fmt, clippy, tests and a build of every target.
-# Tags v*: the same, then publish a GitHub release with the flat assets install.sh downloads
-# (zymon-client-<label> + SHA256SUMS).
+# Pull requests: fmt, clippy, tests and a build of every target.
+# Pushes to main and tags v*: the same, then publish a GitHub release v<workspace version> with the flat assets
+# install.sh downloads (zymon-client-<label> + SHA256SUMS). A push to main replaces that release with the new
+# build (bump the version in zymon/Cargo.toml to keep the previous one); a tag push publishes that tag.
 on:
   push:
     branches: [main]
@@ -90,17 +91,21 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push'
     needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Tag must match the crate version
+      - name: Release tag from the crate version
+        id: ver
         run: |
           version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
-          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != workspace version $version"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME != workspace version $version"; exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
           pattern: zymon-client-*
@@ -116,9 +121,15 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          if [ "$GITHUB_REF_TYPE" = branch ]; then
+            # main: replace the release (and move its tag) so it always matches the latest build
+            gh release delete "$TAG" --cleanup-tag --yes 2>/dev/null || true
+            gh release create "$TAG" release/* --target "$GITHUB_SHA" --title "zymon-client $TAG" \
+              --notes "Build of $GITHUB_SHA from main."
+          elif gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" release/* --title "zymon-client $GITHUB_REF_NAME" --generate-notes
+            gh release create "$TAG" release/* --title "zymon-client $TAG" --generate-notes
           fi
