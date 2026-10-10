@@ -114,12 +114,8 @@ pub fn gather() -> Vec<(&'static str, String)> {
     put(
         "hardware",
         p.hardware.clone().or_else(|| {
-            rd("/proc/device-tree/compatible").and_then(|s| {
-                s.split('\0')
-                    .filter(|e| !e.is_empty())
-                    .next_back()
-                    .map(str::to_string)
-            })
+            rd("/proc/device-tree/compatible")
+                .and_then(|s| s.split('\0').rfind(|e| !e.is_empty()).map(str::to_string))
         }),
     );
     put("revision", p.revision.clone());
