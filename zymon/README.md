@@ -90,10 +90,12 @@ The sample [client/packaging/zymon-client.toml.example](./client/packaging/zymon
 * The server's reply (a `logfetch.cfg`) is stored in `<state dir>/clientcfg.txt`. `log:`/`file:`/`dir:` entries are not acted on yet,
   and `clientversion:` is ignored: zymon never updates itself.
 
-* `cputemp` column (Linux): `[cputemp]` lists every thermal sensor (`name: degrees C`); a client-side `status+<2*interval> HOST.cputemp`
-  goes out with each cycle, yellow at `[cputemp] warn_c` (70) and red at `panic_c` (80) for the hottest CPU sensor, and at least yellow
-  while the Pi firmware reports active throttling or under-voltage. Hosts without a sensor (VMs, macOS) get neither. Add `cputemp` to the
-  server's `hosts.cfg` tags if your server only shows columns it knows (`NOCOLUMNS`/`COLUMNS` settings).
+* `cputemp` column (Linux): `[cputemp]` lists every thermal sensor (`name: degrees C`). Each cycle a client-side `status+<2*interval> HOST.cputemp`
+  goes out in the layout of the original hand-made test, so existing graphs keep working: the date as the first line, then
+  `CPU temperature 42.4 C`, `temp : 42.4` (the line the server's NCV handler graphs as data set `temp`) and
+  `Yellow from 70 C, red from 80 C`. The value is the hottest CPU sensor; the colour turns yellow at `[cputemp] warn_c` (70), red at `panic_c` (80),
+  and at least yellow while the Pi firmware reports throttling or under-voltage (an extra `&yellow firmware: ...` line, ignored by NCV).
+  Hosts without a sensor (VMs, macOS) send neither.
 
 Besides the legacy sections the client sends `[cpuinfo]`, `[cputemp]`, `[crontab]` and `[docker]`; the legacy server keeps them and shows
 them on the "client data" page.

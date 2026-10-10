@@ -143,65 +143,63 @@ fn read_throttled() -> Option<u32> {
     u32::from_str_radix(t.trim_start_matches("0x"), 16).ok()
 }
 
-/// The status colour is that of the hottest CPU sensor (all sensors when none looks like a CPU), raised to
-/// yellow while the Pi firmware reports throttling.
+/// The status keeps the layout of the original hand-made `cputemp` test so the existing server-side graph keeps
+/// working: the first line is just the date, the body (a blank line before and between the lines) is
+///
+/// ```text
+///
+/// CPU temperature 42.4 C
+///
+/// temp : 42.4
+///
+/// Yellow from 70 C, red from 80 C
+/// ```
+///
+/// where `temp : <value>` is the line the server's NCV handler turns into the `temp` data set. The colour follows
+/// the hottest CPU sensor (all sensors when none looks like a CPU) and is raised to yellow while the Pi firmware
+/// reports throttling. The other sensors stay in the `[cputemp]` client section, out of the NCV body.
 pub fn status_message(cfg: &Config, zones: &[Zone], throttled: Option<u32>) -> Option<Vec<u8>> {
-    if zones.is_empty() {
-        return None;
-    }
     let c = &cfg.cputemp;
     let any_cpu = zones.iter().any(|z| is_cpu_zone(&z.name));
-    let relevant = |z: &Zone| !any_cpu || is_cpu_zone(&z.name);
-    let hottest = zones.iter().filter(|z| relevant(z)).max_by(|a, b| {
-        a.celsius
-            .partial_cmp(&b.celsius)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })?;
+    let hottest = zones
+        .iter()
+        .filter(|z| !any_cpu || is_cpu_zone(&z.name))
+        .max_by(|a, b| {
+            a.celsius
+                .partial_cmp(&b.celsius)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })?;
     let mut color = color_for(hottest.celsius, c.warn_c, c.panic_c);
 
-    let mut body = String::new();
-    for z in zones {
-        if relevant(z) {
-            body.push_str(&format!(
-                "&{} {} {:.1}C\n",
-                color_for(z.celsius, c.warn_c, c.panic_c).as_str(),
-                z.name,
-                z.celsius
-            ));
-        } else {
-            body.push_str(&format!("&clear {} {:.1}C\n", z.name, z.celsius));
-        }
-    }
-    body.push_str(&format!(
-        "\nWarning at {:.0}C, critical at {:.0}C\n",
-        c.warn_c, c.panic_c
-    ));
+    let mut body = format!(
+        "\nCPU temperature {t:.1} C\n\ntemp : {t:.1}\n\nYellow from {:.0} C, red from {:.0} C\n",
+        c.warn_c,
+        c.panic_c,
+        t = hottest.celsius
+    );
     if let Some(flags) = throttled {
         let now = throttle_now(flags);
         if !now.is_empty() {
             if color == Color::Green {
                 color = Color::Yellow;
             }
+            // not a `name : number` line, so NCV ignores it
             body.push_str(&format!(
-                "&yellow firmware: {} (get_throttled 0x{flags:x})\n",
+                "\n&yellow firmware: {} (get_throttled 0x{flags:x})\n",
                 now.join(", ")
             ));
         }
     }
 
     let (now, _) = common::now();
-    let date = common::strftime("%a %b %e %H:%M:%S %Z %Y", now, false);
-    let text = match color {
-        Color::Green => format!("CPU temperature ok ({:.1}C)", hottest.celsius),
-        _ => format!("CPU temperature {:.1}C", hottest.celsius),
-    };
+    let date = common::strftime("%a %d %b %H:%M:%S %Z %Y", now, false);
     let minutes = (cfg.schedule.interval_s * 2).div_ceil(60).max(1);
     Some(proto::status(
         Some(&format!("{minutes}m")),
         &cfg.machine(),
         &c.status_column,
         color,
-        &format!("{date} - {text}"),
+        &date,
         &body,
     ))
 }
@@ -242,11 +240,44 @@ mod tests {
     }
 
     #[test]
+    fn matches_the_existing_graph_layout() {
+        let m = text(status_message(&cfg(), &[z("cpu-thermal", 42.4)], None));
+        let (first, body) = m.split_once('\n').unwrap();
+        // first line: header + date only, like the original test
+        assert!(
+            first.starts_with("status+10m pi,lan.cputemp green "),
+            "{first}"
+        );
+        assert!(!first.contains("CPU temperature"));
+        assert_eq!(
+            body,
+            "\nCPU temperature 42.4 C\n\ntemp : 42.4\n\nYellow from 70 C, red from 80 C\n"
+        );
+    }
+
+    /// The server's NCV handler reads `name : number` lines: exactly one data set, `temp`.
+    #[test]
+    fn ncv_sees_a_single_temp_value() {
+        let m = text(status_message(
+            &cfg(),
+            &[z("cpu-thermal", 42.4), z("gpu", 44.0)],
+            Some(0x5),
+        ));
+        let ncv: Vec<(&str, f64)> = m
+            .lines()
+            .skip(1)
+            .filter_map(|l| {
+                let (k, v) = l.split_once(':')?;
+                Some((k.trim(), v.trim().parse().ok()?))
+            })
+            .collect();
+        assert_eq!(ncv, vec![("temp", 42.4)]);
+    }
+
+    #[test]
     fn thresholds_pick_the_colour() {
         let c = cfg();
-        let m = text(status_message(&c, &[z("cpu-thermal", 52.0)], None));
-        assert!(m.starts_with("status+10m pi,lan.cputemp green "), "{m}");
-        assert!(m.contains("&green cpu-thermal 52.0C\n"));
+        assert!(text(status_message(&c, &[z("cpu-thermal", 52.0)], None)).contains(" green "));
         assert!(text(status_message(&c, &[z("cpu-thermal", 70.0)], None)).contains(" yellow "));
         assert!(text(status_message(&c, &[z("cpu-thermal", 80.0)], None)).contains(" red "));
     }
@@ -259,11 +290,9 @@ mod tests {
             &[z("cpu-thermal", 50.0), z("iwlwifi_1", 95.0)],
             None,
         ));
-        assert!(m.starts_with("status+10m pi,lan.cputemp green "), "{m}");
-        assert!(m.contains("&clear iwlwifi_1 95.0C"));
+        assert!(m.contains(" green ") && m.contains("temp : 50.0\n"), "{m}");
         // no CPU-looking sensor: all of them count
-        let m = text(status_message(&c, &[z("battery", 85.0)], None));
-        assert!(m.contains(" red "));
+        assert!(text(status_message(&c, &[z("battery", 85.0)], None)).contains(" red "));
     }
 
     #[test]
@@ -271,7 +300,7 @@ mod tests {
         let c = cfg();
         let m = text(status_message(&c, &[z("cpu-thermal", 55.0)], Some(0x50005)));
         assert!(m.contains(" yellow "), "{m}");
-        assert!(m.contains("under-voltage, throttled (get_throttled 0x50005)"));
+        assert!(m.contains("&yellow firmware: under-voltage, throttled (get_throttled 0x50005)"));
         // past-only flags (bits 16+) do not matter
         assert!(
             text(status_message(&c, &[z("cpu-thermal", 55.0)], Some(0x50000))).contains(" green ")
