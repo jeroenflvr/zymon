@@ -78,6 +78,20 @@ tasks:
       - cd {{.DIST}} && find . -type f -name {{.BIN}} -exec shasum -a 256 {} + > SHA256SUMS
       - ls -l {{.DIST}}/*/{{.BIN}}
 
+  release:
+    desc: Flat GitHub release assets (zymon-client-<label> + SHA256SUMS) for install.sh
+    deps: [dist]
+    cmds:
+      - rm -rf {{.DIST}}/release && mkdir -p {{.DIST}}/release
+      - |
+        for d in {{.DIST}}/*/; do
+          label=$(basename "$d")
+          [ "$label" = release ] && continue
+          cp "${d}{{.BIN}}" {{.DIST}}/release/{{.BIN}}-$label
+        done
+      - cd {{.DIST}}/release && shasum -a 256 {{.BIN}}-* > SHA256SUMS
+      - ls -l {{.DIST}}/release
+
   size:
     desc: Print stripped binary sizes per target
     cmds:

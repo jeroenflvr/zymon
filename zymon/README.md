@@ -25,6 +25,21 @@ task dist      # dist/linux-armv6, linux-armv7, linux-aarch64 (static musl) and 
 
 ## Install
 
+One-liner (Linux ARM and Apple Silicon; asks for the Xymon server, then installs, configures and starts the service):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jeroenflvr/zymon/main/zymon/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/jeroenflvr/zymon/main/zymon/install.sh | sh -s -- --server xymon.example.org --yes
+```
+
+[install.sh](./install.sh) detects OS/arch, downloads the matching `zymon-client-<label>` from the GitHub release, verifies it against
+`SHA256SUMS`, installs to `/usr/local/bin`, runs `zymon-client init` as an unprivileged service user (`zymon` on Linux, the invoking user
+on macOS), and installs a systemd unit or launchd daemon. Re-running upgrades the binary and keeps the config. `--help` lists the options
+(`--hostname`, `--version`, `--prefix`, `--no-service`, `--uninstall [--purge]`). `task release` builds the flat release assets
+(`dist/release/`) to attach to a GitHub release.
+
+Manual install:
+
 Pick the binary by `uname -m` on the target:
 
 | `uname -m` | Hardware | `dist/` directory |
