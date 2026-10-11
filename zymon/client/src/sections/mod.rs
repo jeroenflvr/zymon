@@ -15,6 +15,7 @@ pub mod date;
 pub mod df;
 pub mod docker;
 pub mod free;
+pub mod gpu;
 pub mod ifconfig;
 pub mod ifstat;
 pub mod inode;
@@ -60,6 +61,7 @@ pub const LINUX: &[&str] = &[
     "vmstat",
     "cpuinfo",
     "cputemp",
+    "gpu",
     "crontab",
     "docker",
     "clientversion",
@@ -108,6 +110,8 @@ pub struct Ctx<'a> {
     pub ps: Option<Vec<u8>>,
     /// `[smart]` capture, handed to the `smart` status column after the client message is built.
     pub smart: Option<Vec<smart::Disk>>,
+    /// `[gpu]` capture (or the nvidia-smi failure), handed to the `gpu` status column like `smart`.
+    pub gpu: Option<Result<Vec<gpu::Card>, String>>,
     who: Option<Vec<u8>>,
 }
 
@@ -119,6 +123,7 @@ impl<'a> Ctx<'a> {
             cur,
             ps: None,
             smart: None,
+            gpu: None,
             who: None,
         }
     }
@@ -168,6 +173,7 @@ pub fn run(name: &str, ctx: &mut Ctx, w: &mut SectionWriter) -> Res {
         "vmstat" => vmstat::vmstat(ctx, w),
         "cpuinfo" => cpuinfo::cpuinfo(ctx, w),
         "cputemp" => cputemp::cputemp(ctx, w),
+        "gpu" => gpu::gpu(ctx, w),
         "crontab" => crontab::crontab(ctx, w),
         "docker" => docker::docker(ctx, w),
         "clientversion" => clientversion::clientversion(ctx, w),

@@ -41,6 +41,7 @@ top = true
 vmstat = true
 cpuinfo = true
 cputemp = true            # Linux only; also sends the `cputemp` status column
+gpu = true                # Linux, discrete NVIDIA cards via nvidia-smi; also sends the `gpu` status column
 crontab = true
 docker = false
 clientversion = true
@@ -59,6 +60,13 @@ status_column = "cputemp"
 [smart]
 devices = []              # smartctl arguments per disk, e.g. ["/dev/sda", "/dev/sdb -d sat"]; empty = `smartctl --scan-open`
 status_column = "smart"
+
+[gpu]
+temp_warn_c = 80.0        # yellow at or above
+temp_panic_c = 90.0       # red at or above
+mem_warn_pct = 90.0       # percent of GPU memory in use; yellow at or above
+mem_panic_pct = 98.0      # red at or above; raise both above 100 for frameworks that reserve all memory up front
+status_column = "gpu"
 
 [info]                    # snapshot taken by `init`, informational only
 model = "Raspberry Pi Zero W Rev 1.1"

@@ -304,7 +304,7 @@ fn device_specs(cfg: &Config, timeout: Duration) -> io::Result<Vec<Vec<String>>>
     let o = smartctl(&["--scan-open"], timeout)?;
     if !o.success && o.stdout.is_empty() {
         return Err(io::Error::other(
-            "smartctl --scan-open failed (needs root or a sudoers rule)",
+            "smartctl --scan-open failed (needs root, or a sudoers rule and no NoNewPrivileges in the service unit)",
         ));
     }
     Ok(String::from_utf8_lossy(&o.stdout)

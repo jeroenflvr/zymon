@@ -66,5 +66,6 @@ pub fn build_client_message(cfg: &Config, state: &mut State, only: Option<&[Stri
     }
     state.prev = ctx.cur.take();
     state.smart = ctx.smart.take();
+    state.gpu = ctx.gpu.take();
     msg
 }

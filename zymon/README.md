@@ -105,10 +105,19 @@ The sample [client/packaging/zymon-client.toml.example](./client/packaging/zymon
   more; clear for disks in standby (they are never spun up: `-n standby`) or without SMART. The body ends with `<name>_temp : <C>` lines,
   so `NCV_smart="sda_temp:GAUGE,..."` graphs the temperatures. Disks come from `smartctl --scan-open`, or `[smart] devices` lists them
   with any `-d TYPE` smartctl needs. `smartctl` needs raw device access: run as root or add a sudoers rule
-  (`zymon ALL=(root) NOPASSWD: /usr/sbin/smartctl`; `install.sh` offers to write it) — the client then calls `sudo -n smartctl`.
+  (`zymon ALL=(root) NOPASSWD: /usr/sbin/smartctl`; `install.sh` offers to write it) — the client then calls `sudo -n smartctl`. The systemd unit must not set `NoNewPrivileges=true` (sudo is setuid and would fail);
+  `install.sh` leaves it out when it wrote the sudoers rule.
   `init` leaves the section out when smartctl is missing and sets it to `false` when it cannot run it.
+* `gpu` column (Linux, discrete NVIDIA cards): `[gpu]` has one line per card from a single `nvidia-smi --query-gpu` call:
+  `gpu<N> <temp C> <util %> <mem used MiB> <mem total MiB> <power W> <bus id> <name> [# fault]` (`-` where the card reports `[N/A]`).
+  Each cycle a client-side `status+<2*interval> HOST.gpu` goes out: yellow/red when a card reaches `[gpu] temp_warn_c`/`temp_panic_c`
+  (80/90 C) or `mem_warn_pct`/`mem_panic_pct` (90/98 % of its memory in use; frameworks that reserve all GPU memory up front need these
+  raised above 100), red when nvidia-smi fails (driver not loaded, card fallen off the bus) or reports a card as lost. The body ends with
+  `gpu<N>_temp`, `gpu<N>_util` and `gpu<N>_mem` (percent used) lines, so `NCV_gpu="*:GAUGE"` (and `gpu=ncv` in `TEST2RRD`) graphs them.
+  nvidia-smi needs no root. Integrated GPUs (Jetson/Tegra, no dedicated memory) are left out; `init` leaves the section out when
+  nvidia-smi is missing or sees no discrete card, and sets it to `false` when nvidia-smi fails.
 
-Besides the legacy sections the client sends `[cpuinfo]`, `[cputemp]`, `[crontab]`, `[docker]` and `[smart]`; the legacy server keeps them and shows
+Besides the legacy sections the client sends `[cpuinfo]`, `[cputemp]`, `[gpu]`, `[crontab]`, `[docker]` and `[smart]`; the legacy server keeps them and shows
 them on the "client data" page.
 
 ## Tests

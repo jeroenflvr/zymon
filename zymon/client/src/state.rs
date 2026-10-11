@@ -1,6 +1,7 @@
 //! Cross-cycle state: the previous counter snapshot, so `[vmstat]` and `[top]` can report deltas, plus the
-//! `[smart]` capture of the current cycle for the status column that follows the client message.
+//! `[smart]` and `[gpu]` captures of the current cycle for the status columns that follows the client message.
 
+use crate::sections::gpu::Card;
 use crate::sections::smart::Disk;
 use std::time::Instant;
 
@@ -27,4 +28,6 @@ pub struct State {
     pub prev: Option<Snap>,
     /// Set by the `[smart]` section, taken by the `smart` status column (smartctl runs once per cycle).
     pub smart: Option<Vec<Disk>>,
+    /// Set by the `[gpu]` section, taken by the `gpu` status column (nvidia-smi runs once per cycle).
+    pub gpu: Option<Result<Vec<Card>, String>>,
 }

@@ -2,7 +2,7 @@
 
 use crate::collect::build_client_message;
 use crate::config::{self, Config};
-use crate::sections::{cputemp, docker, smart};
+use crate::sections::{cputemp, docker, gpu, smart};
 use crate::state::State;
 use crate::sys::common;
 use std::io::Write;
@@ -44,7 +44,7 @@ pub struct CycleOpts<'a> {
 }
 
 /// Columns the client evaluates itself, sent as one `combo`: `docker` (when `docker.must_run` is set), `cputemp`
-/// and `smart` (from the `[smart]` capture of this cycle).
+/// and `smart`/`gpu` (from the `[smart]`/`[gpu]` captures of this cycle).
 fn client_side_statuses(cfg: &Config, state: &mut State) -> Vec<Vec<u8>> {
     let mut v = Vec::new();
     if !cfg.docker.must_run.is_empty()
@@ -63,6 +63,11 @@ fn client_side_statuses(cfg: &Config, state: &mut State) -> Vec<Vec<u8>> {
     {
         v.push(s);
     }
+    if let Some(cards) = state.gpu.take()
+        && let Some(s) = gpu::status_message(cfg, &cards)
+    {
+        v.push(s);
+    }
     v
 }
 
@@ -74,6 +79,7 @@ pub fn cycle(cfg: &Config, state: &mut State, o: &CycleOpts) -> bool {
         client_side_statuses(cfg, state)
     } else {
         state.smart = None;
+        state.gpu = None;
         Vec::new()
     };
 

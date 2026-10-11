@@ -77,6 +77,17 @@ pub struct Smart {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
+pub struct Gpu {
+    pub temp_warn_c: f64,
+    pub temp_panic_c: f64,
+    /// Percent of the card's memory in use.
+    pub mem_warn_pct: f64,
+    pub mem_panic_pct: f64,
+    pub status_column: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default)]
 pub struct Exec {
     pub timeout_s: u64,
 }
@@ -105,6 +116,7 @@ pub struct Config {
     pub exec: Exec,
     pub cputemp: Cputemp,
     pub smart: Smart,
+    pub gpu: Gpu,
     pub info: Info,
     /// Optional override of where the server reply is kept (default: see `state_dir`).
     pub state_dir: Option<String>,
@@ -160,6 +172,19 @@ impl Default for Smart {
     }
 }
 
+impl Default for Gpu {
+    fn default() -> Self {
+        // Consumer cards start clocking down in the low-to-mid 80s C.
+        Gpu {
+            temp_warn_c: 80.0,
+            temp_panic_c: 90.0,
+            mem_warn_pct: 90.0,
+            mem_panic_pct: 98.0,
+            status_column: "gpu".into(),
+        }
+    }
+}
+
 impl Default for Exec {
     fn default() -> Self {
         Exec { timeout_s: 20 }
@@ -202,6 +227,12 @@ impl Config {
         }
         if self.cputemp.warn_c >= self.cputemp.panic_c {
             return bad("cputemp.warn_c must be below cputemp.panic_c");
+        }
+        if self.gpu.temp_warn_c >= self.gpu.temp_panic_c {
+            return bad("gpu.temp_warn_c must be below gpu.temp_panic_c");
+        }
+        if self.gpu.mem_warn_pct >= self.gpu.mem_panic_pct {
+            return bad("gpu.mem_warn_pct must be below gpu.mem_panic_pct");
         }
         if self
             .docker
@@ -319,6 +350,27 @@ impl Config {
             "status_column = {}\n\n",
             q(&self.smart.status_column)
         ));
+        s.push_str("[gpu]   # client-side `gpu` status column (Linux) from nvidia-smi, discrete NVIDIA cards only\n");
+        s.push_str(&format!(
+            "temp_warn_c = {:?}   # yellow at or above\n",
+            self.gpu.temp_warn_c
+        ));
+        s.push_str(&format!(
+            "temp_panic_c = {:?}   # red at or above\n",
+            self.gpu.temp_panic_c
+        ));
+        s.push_str(&format!(
+            "mem_warn_pct = {:?}   # memory used, yellow at or above (ML frameworks often reserve it all: raise both)\n",
+            self.gpu.mem_warn_pct
+        ));
+        s.push_str(&format!(
+            "mem_panic_pct = {:?}   # red at or above; above 100 disables\n",
+            self.gpu.mem_panic_pct
+        ));
+        s.push_str(&format!(
+            "status_column = {}\n\n",
+            q(&self.gpu.status_column)
+        ));
         s.push_str("[info]   # snapshot taken at init for reference only; [cpuinfo] re-reads /proc/cpuinfo each cycle\n");
         let i = &self.info;
         for (k, v) in [
@@ -404,6 +456,8 @@ mod tests {
         c.sections.insert("docker".into(), false);
         c.docker.must_run = vec!["web".into()];
         c.smart.devices = vec!["/dev/sda".into(), "/dev/sdb -d sat".into()];
+        c.gpu.temp_warn_c = 75.5;
+        c.gpu.mem_panic_pct = 101.0;
         c.info = Info {
             model: Some("Raspberry Pi \"Zero\" W".into()),
             cpu_model: Some("ARMv6".into()),
@@ -442,6 +496,13 @@ mod tests {
         assert!(
             Config::parse(
                 "[identity]\nhostname='a'\nos='l'\n[schedule]\ninterval_s=0\n",
+                Path::new("x")
+            )
+            .is_err()
+        );
+        assert!(
+            Config::parse(
+                "[identity]\nhostname='a'\nos='l'\n[gpu]\nmem_warn_pct=99.0\nmem_panic_pct=95.0\n",
                 Path::new("x")
             )
             .is_err()

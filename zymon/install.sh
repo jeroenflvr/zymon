@@ -356,6 +356,11 @@ EOF
 		say "Service org.zymon.client started as $SVC_USER (log: $LOGFILE)"
 	elif command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
 		step "Installing systemd service"
+		# sudo is a setuid binary: NoNewPrivileges would make `sudo -n smartctl` fail, so it is dropped when the rule exists.
+		NNP="NoNewPrivileges=true"
+		if [ -e "$SUDOERS_FILE" ]; then
+			NNP="# NoNewPrivileges is off: $SUDOERS_FILE lets the client run smartctl through sudo"
+		fi
 		cat >"$TMP/unit" <<EOF
 [Unit]
 Description=zymon client (Xymon-compatible monitoring client)
@@ -370,7 +375,7 @@ ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=30
 StateDirectory=zymon
-NoNewPrivileges=true
+$NNP
 ProtectSystem=strict
 ProtectHome=true
 

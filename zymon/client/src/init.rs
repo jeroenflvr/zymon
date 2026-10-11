@@ -65,6 +65,22 @@ fn cputemp_probe() -> Probe {
     }
 }
 
+/// nvidia-smi (installed with the NVIDIA driver) answering with at least one discrete card.
+fn gpu_probe() -> Probe {
+    use crate::sections::gpu;
+    if !cfg!(target_os = "linux") {
+        return Probe::Absent("not on this OS");
+    }
+    if exec::which("nvidia-smi").is_none() {
+        return Probe::Absent("nvidia-smi not found");
+    }
+    match gpu::query(std::time::Duration::from_secs(10)) {
+        Ok(Ok(cards)) if !cards.is_empty() => Probe::On,
+        Ok(Ok(_)) => Probe::Absent("no discrete NVIDIA GPU"),
+        _ => Probe::Off("nvidia-smi failed (driver not loaded?)"),
+    }
+}
+
 /// smartmontools installed and runnable: as root directly, otherwise through a NOPASSWD sudoers rule.
 fn smart_probe() -> Probe {
     let Some(path) = exec::which("smartctl") else {
@@ -170,6 +186,7 @@ pub fn probe(name: &str, docker_sock: &str) -> Probe {
             }
         }
         "cputemp" => cputemp_probe(),
+        "gpu" => gpu_probe(),
         "crontab" => {
             let any = File::open("/etc/crontab").is_ok()
                 || std::path::Path::new("/etc/cron.d").is_dir()

@@ -169,6 +169,7 @@ fn init_refuses_to_overwrite() {
                 | "smart"
                 | "docker"
                 | "cputemp"
+                | "gpu"
                 | "ifconfig"
                 | "osversion"
                 | "crontab"
