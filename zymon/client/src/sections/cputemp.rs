@@ -20,14 +20,34 @@ pub fn parse_milli(s: &str) -> Option<f64> {
     (v > -200_000.0 && v < 300_000.0).then_some(v / 1000.0)
 }
 
+/// How well a sensor name describes the processor: `Some(0)` for the package/die sensors (`x86_pkg_temp`,
+/// `coretemp`, AMD `k10temp`/`Tctl`), `Some(1)` for SoC-style names (`cpu-thermal`, `soc`, `TCPU`), `Some(2)` for
+/// `acpitz`, which on many x86 boards is a fixed bogus value (91 C) and only counts when nothing better exists.
+/// `None` for batteries, wifi chips, disks, PCH and the like.
+pub fn cpu_rank(name: &str) -> Option<u8> {
+    let n = name.to_ascii_lowercase();
+    let has = |keys: &[&str]| keys.iter().any(|k| n.contains(k));
+    if has(&["pkg", "package", "coretemp", "k10temp", "tctl"]) {
+        Some(0)
+    } else if has(&["cpu", "soc", "core"]) {
+        Some(1)
+    } else if has(&["acpitz"]) {
+        Some(2)
+    } else {
+        None
+    }
+}
+
 /// Zones that describe the processor rather than a battery, wifi chip or disk.
 pub fn is_cpu_zone(name: &str) -> bool {
-    let n = name.to_ascii_lowercase();
-    [
-        "cpu", "soc", "core", "pkg", "k10temp", "package", "tctl", "acpitz",
-    ]
-    .iter()
-    .any(|k| n.contains(k))
+    cpu_rank(name).is_some()
+}
+
+/// The sensors the status is computed from: every sensor of the best (lowest) rank present, so on a dual-socket
+/// x86 both `x86_pkg_temp` zones count while `acpitz` is ignored; all sensors when none looks like a CPU.
+pub fn cpu_sensors(zones: &[Zone]) -> Vec<&Zone> {
+    let best = zones.iter().filter_map(|z| cpu_rank(&z.name)).min();
+    zones.iter().filter(|z| cpu_rank(&z.name) == best).collect()
 }
 
 #[cfg_attr(target_os = "macos", allow(dead_code))]
@@ -155,28 +175,34 @@ fn read_throttled() -> Option<u32> {
 /// Yellow from 70 C, red from 80 C
 /// ```
 ///
-/// where `temp : <value>` is the line the server's NCV handler turns into the `temp` data set. The colour follows
-/// the hottest CPU sensor (all sensors when none looks like a CPU) and is raised to yellow while the Pi firmware
+/// where `temp : <value>` is the line the server's NCV handler turns into the `temp` data set. The value and the
+/// colour follow the hottest CPU sensor (see [`cpu_sensors`]); with more than one CPU sensor (dual-socket x86) a
+/// `tempN : <value>` line per sensor follows, in sensor order. The colour is raised to yellow while the Pi firmware
 /// reports throttling. The other sensors stay in the `[cputemp]` client section, out of the NCV body.
 pub fn status_message(cfg: &Config, zones: &[Zone], throttled: Option<u32>) -> Option<Vec<u8>> {
     let c = &cfg.cputemp;
-    let any_cpu = zones.iter().any(|z| is_cpu_zone(&z.name));
-    let hottest = zones
-        .iter()
-        .filter(|z| !any_cpu || is_cpu_zone(&z.name))
-        .max_by(|a, b| {
-            a.celsius
-                .partial_cmp(&b.celsius)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })?;
+    let sensors = cpu_sensors(zones);
+    let hottest = sensors.iter().max_by(|a, b| {
+        a.celsius
+            .partial_cmp(&b.celsius)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    })?;
     let mut color = color_for(hottest.celsius, c.warn_c, c.panic_c);
 
     let mut body = format!(
-        "\nCPU temperature {t:.1} C\n\ntemp : {t:.1}\n\nYellow from {:.0} C, red from {:.0} C\n",
-        c.warn_c,
-        c.panic_c,
+        "\nCPU temperature {t:.1} C\n\ntemp : {t:.1}\n",
         t = hottest.celsius
     );
+    if sensors.len() > 1 {
+        body.push('\n');
+        for (i, z) in sensors.iter().enumerate() {
+            body.push_str(&format!("temp{i} : {:.1}\n", z.celsius));
+        }
+    }
+    body.push_str(&format!(
+        "\nYellow from {:.0} C, red from {:.0} C\n",
+        c.warn_c, c.panic_c
+    ));
     if let Some(flags) = throttled {
         let now = throttle_now(flags);
         if !now.is_empty() {
@@ -293,6 +319,58 @@ mod tests {
         assert!(m.contains(" green ") && m.contains("temp : 50.0\n"), "{m}");
         // no CPU-looking sensor: all of them count
         assert!(text(status_message(&c, &[z("battery", 85.0)], None)).contains(" red "));
+    }
+
+    /// Intel laptop (lmde): acpitz and B0D4 sit at a fixed bogus 91 C; the package sensor is the truth.
+    #[test]
+    fn package_sensor_beats_acpitz() {
+        let c = cfg();
+        let zones = [
+            z("acpitz", 91.0),
+            z("SEN1", 61.0),
+            z("INT3400_Thermal", 20.0),
+            z("pch_cometlake", 54.0),
+            z("B0D4", 91.0),
+            z("iwlwifi_1", 60.0),
+            z("x86_pkg_temp", 72.0),
+        ];
+        let m = text(status_message(&c, &zones, None));
+        assert!(m.contains(" yellow ") && m.contains("temp : 72.0\n"), "{m}");
+        assert!(!m.contains("temp0"), "{m}");
+        // acpitz still counts when it is the only CPU-looking sensor
+        let m = text(status_message(
+            &c,
+            &[z("acpitz", 45.0), z("nvme", 60.0)],
+            None,
+        ));
+        assert!(m.contains(" green ") && m.contains("temp : 45.0\n"), "{m}");
+        assert_eq!(
+            cpu_sensors(&[
+                z("cpu-thermal", 1.0),
+                z("acpitz", 2.0),
+                z("x86_pkg_temp", 3.0)
+            ])
+            .iter()
+            .map(|z| z.name.as_str())
+            .collect::<Vec<_>>(),
+            ["x86_pkg_temp"]
+        );
+    }
+
+    /// Dual-socket x86 (biggie): both x86_pkg_temp zones count, the hottest sets `temp`, each gets a `tempN` line.
+    #[test]
+    fn all_packages_are_reported() {
+        let zones = [
+            z("x86_pkg_temp", 54.0),
+            z("acpitz", 91.0),
+            z("x86_pkg_temp_1", 58.5),
+        ];
+        let m = text(status_message(&cfg(), &zones, None));
+        let (_, body) = m.split_once('\n').unwrap();
+        assert_eq!(
+            body,
+            "\nCPU temperature 58.5 C\n\ntemp : 58.5\n\ntemp0 : 54.0\ntemp1 : 58.5\n\nYellow from 70 C, red from 80 C\n"
+        );
     }
 
     #[test]

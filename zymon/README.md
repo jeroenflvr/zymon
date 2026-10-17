@@ -95,7 +95,10 @@ The sample [client/packaging/zymon-client.toml.example](./client/packaging/zymon
 * `cputemp` column (Linux): `[cputemp]` lists every thermal sensor (`name: degrees C`). Each cycle a client-side `status+<2*interval> HOST.cputemp`
   goes out in the layout of the original hand-made test, so existing graphs keep working: the date as the first line, then
   `CPU temperature 42.4 C`, `temp : 42.4` (the line the server's NCV handler graphs as data set `temp`) and
-  `Yellow from 70 C, red from 80 C`. The value is the hottest CPU sensor; the colour turns yellow at `[cputemp] warn_c` (70), red at `panic_c` (80),
+  `Yellow from 70 C, red from 80 C`. The value is the hottest CPU sensor: package/die sensors (`x86_pkg_temp`, `coretemp`, `k10temp`/`Tctl`)
+  win over SoC-style names (`cpu-thermal`), and `acpitz` (a fixed bogus 91 C on many x86 boards) only counts when nothing better exists.
+  With more than one package (dual-socket x86) a `temp0 : 54.0` / `temp1 : 58.5` line per package follows, for `NCV_cputemp="temp:GAUGE,temp0:GAUGE,..."`.
+  The colour turns yellow at `[cputemp] warn_c` (70), red at `panic_c` (80),
   and at least yellow while the Pi firmware reports throttling or under-voltage (an extra `&yellow firmware: ...` line, ignored by NCV).
   Hosts without a sensor (VMs, macOS) send neither.
 * `smart` column: `[smart]` lists every disk smartmontools can see, one line per disk:
